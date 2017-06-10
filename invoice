@@ -1,0 +1,205 @@
+#!/bin/bash
+
+function pause() {
+    read -p ">> press enter" press 
+}
+function selection() {
+    echo
+    read -p ">> $1 >> " $2
+    echo
+}
+function computer() {
+    printf "\n=================================================================\nCOMPUTER: $1\n=================================================================\n\n"
+}
+computer "INVOICE MAKER"
+pause
+computer "pick COMPANY"
+pause
+
+Rscript companies.R
+sed -i '1d' companies.csv
+companycount=$(cat companies.csv | wc -l)
+index=1
+while read line; do
+	echo "$index $line"
+	index=$((index+1))
+done < companies.csv
+
+selection "pick a number" company
+
+while ! [[ $company =~ ^[0-9]+$ ]]; do
+    computer "not a NUMBER. which COMPANY?"
+    selection "type number here" company
+done
+while [ $company -le 0 ] || [ $company -gt $companycount ]; do
+        computer "not a company. which COMPANY?"
+        selection "pick a number from the list" company
+done
+
+echo $company > company.txt
+Rscript company.R
+finished="n"
+echo "item,code,style,quantity,price,premium" > invoice.txt
+index=1
+while [[ $finished == "n" ]]; do
+	correct=n
+    while [[ $correct == "n" ]]; do
+        computer "STYLE CODE"
+        selection "type here" code 
+        while [ $(echo $code | wc -m) == 1 ] || [ $code == "" ]; do
+            computer "NOT A CODE"
+            selection "type here again" code
+        done
+        echo ${code//[[:blank:]]/} > tmp.code
+        Rscript bycode.R
+        check=$(cat bycode.csv | wc -l)
+        sed -i '1d' bycode.csv
+        if [[ $check > 1 ]]; then
+            while IFS=, read column company stylecode stylename price date
+            do
+                computer "$date, $stylecode, $stylename, $price"
+            done < bycode.csv
+        else
+            computer "THIS IS A NEW STYLE"
+        fi
+        pause
+        computer "STYLE NAME"
+        selection "type style here" style
+        while [[ $style == "" ]]; do
+            computer "YOU ENTERED NOTHING"
+            selection "type here again" style
+        done
+        echo ${style//[[:blank:]]/} > tmp.style
+        Rscript bystyle.R
+        check=$(cat bystyle.csv | wc -l)
+        sed -i '1d' bystyle.csv
+        if [[ $check > 1 ]]; then
+            while IFS=, read column company stylecode stylename price date
+            do
+                computer "$date, $stylecode, $stylename, $price"
+            done < bystyle.csv
+        else
+            computer "THIS IS NEW STYLE"
+        fi
+        pause
+        computer "how many PIECES"
+        selection "type number here" pieces
+        while ! [[ $pieces =~ ^[0-9]+$ ]]; do
+            computer "NOT A NUMBER. TRY AGAIN"
+            selection "type number here" pieces
+        done
+        computer "what is PRICE"
+        selection "type number here" price
+        while ! [[ $price =~ ^[0-9]+(\.[0-9]+)?$ ]]; do
+            computer "NOT A NUMBER. TRY AGAIN"
+            selection "type number here" price
+        done
+        computer "$code, $style, $pieces TOTAL, \$$price each\nCOMPUTER: RIGHT?"
+        selection "ENTER Y or N" correct
+        correct=$(echo $correct | awk '{print tolower($0)}')
+	    while [ $correct != "y" ] && [ $correct != "n" ]; do
+            computer "NOT Y or N. TRY AGAIN"
+            selection "Y or N" correct; correct=$(echo $correct | awk '{print tolower($0)}')
+	    done
+    done
+	echo "$index,$code,$style,$pieces,$price,N"  >> invoice.txt
+    computer "Invoice so far:"
+    awk -F, '{if (NR!=1) {print "#" $1, $2, $3,"TOTAL:" $4, "EACH $" $5}}' invoice.txt
+    computer "FINISHED? Y or N"
+    selection "type here" finished 
+    finished=$(echo $finished | awk '{print tolower($0)}')
+	while [ $finished != "y" ] && [ $finished != "n" ]; do
+        computer "NOT Y or N. TRY AGAIN"
+        selection "Y or N" finished; finished=$(echo $finished | awk '{print tolower($0)}')
+	done
+    index=$((index+1))
+done
+
+
+computer "PREMIUM SURCHARGE? Y or N"
+selection "type here" surcharge
+surcharge=$(echo $surcharge | awk '{print tolower($0)}')
+while [ $surcharge != "y" ] && [ $surcharge != "n" ]; do
+    computer "NOT Y or N. TRY AGAIN"
+    selection "Y or N" surcharge; surcharge=$(echo $finished | awk '{print tolower($0)}')
+done
+if [ $surcharge == "y" ]; then
+    itables=$(cat invoice.txt | wc -l)
+    itables=$((itables-1))
+    computer "what is SURCHARGE PERCENTAGE?"
+    selection "type number here" percentagesurcharge
+    while ! [[ $percentagesurcharge =~ ^[0-9]+(\.[0-9]+)?$ ]]; do
+        computer "not a NUMBER. TRY AGAIN"
+        selection "type number here" percentagesurcharge
+    done
+    echo $percentagesurcharge > percentagesurcharge.txt
+    finished="n"
+    while [ $finished == "n" ]; do
+	correct="n"
+        while [ $correct == "n" ]; do
+            computer "which item NUMBER have surcharge?"
+            awk -F, '{if (NR!=1) {print "# " $1 " | " $2 " | " $3 " | " $6}}' invoice.txt
+            selection "type number here" surchargeitem
+            while ! [[ $surchargeitem =~ ^[0-9]+$ ]]; do
+                computer "not a number. TRY AGAIN?"
+            selection "which item NUMBER?" surchargeitem
+            done
+            while [[ $surchargeitem > $itables ]]; do
+                computer "no item with that number. TRY AGAIN"
+                selection "pick a number" surchargeitem 
+            done
+            surchargeitem=$((surchargeitem+1))
+            computer "is this CORRECT?"
+            awk -F, -v var=$surchargeitem '{if (NR==var) {$6="Y"} if (NR!=1) {print "# " $1 " | " $2 " | " $3 " | " $6}}' invoice.txt
+            selection "ENTER Y or N" correct
+            correct=$(echo $correct | awk '{print tolower($0)}')
+            while [ $correct != "y" ] && [ $correct != "n" ]; do
+                computer "NOT Y or N. TRY AGAIN"
+                selection "Y or N" correct; correct=$(echo $correct | awk '{print tolower($0)}')
+            done
+        done
+        awk -F, -v var=$surchargeitem '{if (NR==var) {$6="Y"} {print}}' OFS=, invoice.txt > invoice_surcharge.txt
+        mv invoice_surcharge.txt invoice.txt
+        computer "FINISHED? Y or N"
+        selection "type here" finished 
+        finished=$(echo $finished | awk '{print tolower($0)}')
+        while [ $finished != "y" ] && [ $finished != "n" ]; do
+            computer "NOT Y or N. TRY AGAIN"
+            selection "Y or N" finished; finished=$(echo $finished | awk '{print tolower($0)}')
+        done
+    done
+else
+	echo "0" > percentagesurcharge.txt
+fi
+mv invoice.txt invoice.csv 
+
+Rscript scanupdate.R
+
+mv percentagesurcharge.txt percentagesurcharge.csv
+rm companies.csv
+rm company.txt
+rm selcompany.csv
+rm tmp.code
+rm tmp.style
+rm bycode.csv
+rm bystyle.csv
+
+python invoice.py &&
+
+#rm percentagesurcharge.csv
+#rm invoice.csv
+
+company=$(awk '{if (NR==2) {gsub(/"/, "", $1); print}}' company.csv)
+htmlname=$(ls template | grep $company)
+pdfnum=$(echo ${htmlname%.html} | awk -F'_' '{print $2}')
+company=${company^}
+pdfname="$company-Invoice-$pdfnum.pdf"
+html2pdf template/$htmlname $pdfname
+company=${company,}
+companycheck=$(ls $HOME/Documents/invoices | grep $company | wc -l) #or wherever you store your files
+if [ $companycheck == 0 ]; then
+	mkdir $HOME/Documents/invoices/$company
+fi
+rm ./template/$htmlname
+mv $pdfname $HOME/Documents/invoices/$company/.
+#rm company.csv

@@ -1,0 +1,7 @@
+database <- read.csv("company_database.csv")
+selection <- read.table("company.txt")
+companies <- as.data.frame(unique(database$company))
+chosen <- as.character(companies[as.numeric(selection[1]),])
+write.csv(chosen, "company.csv", row.names = FALSE)
+company <- subset(database, subset = database$company == chosen) 
+write.csv(company, "selcompany.csv", row.names = FALSE)
