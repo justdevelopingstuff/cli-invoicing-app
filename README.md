@@ -1,3 +1,10 @@
+invoice-cli
+
+bash, python, and r scripts to create a simple terminal invoice app
+
+background
+
+A fun collab to create a command line terminal app build in r, python, and bash to write and produce pdf invoices
 
 Create PDF invoices in terminal
 -------------------------------
